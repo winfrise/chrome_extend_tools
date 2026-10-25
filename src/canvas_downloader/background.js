@@ -1,5 +1,19 @@
 chrome.action.onClicked.addListener(async (tab) => {
   try {
+
+    function getFormattedTimestamp() {
+      const now = new Date();
+      const year = now.getFullYear();
+      // getMonth() 返回 0-11，所以需要 +1；padStart(2, '0') 用于不足两位时补零
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+
+      return `${year}${month}${day}_${hours}时${minutes}分${seconds}秒`;
+    }
+
     // 1. 注入脚本，提取所有 canvas 并转为 Base64 数组
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -41,11 +55,11 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
 
     // 3. 用户点击“确认”，获取当前时间戳并开始下载
-    const timestamp = Date.now(); 
+    const timestamp = getFormattedTimestamp(); 
 
     canvasImages.forEach((dataUrl, index) => {
       // 格式为：Downloads/时间戳/canvas_时间戳_序号.png
-      const filePath = `${timestamp}/canvas_${timestamp}_${index + 1}.png`;
+      const filePath = `Canvas_${timestamp}/canvas_${index + 1}.png`;
 
       chrome.downloads.download({
         url: dataUrl,
