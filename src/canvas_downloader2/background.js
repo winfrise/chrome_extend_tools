@@ -38,7 +38,7 @@ chrome.action.onClicked.addListener(async (tab) => {
         const images = [];
         document.querySelectorAll('canvas').forEach((canvas) => {
           try {
-            const dataUrl = canvas.toDataURL('image/png');
+            const dataUrl = canvas.toDataURL('image/jpeg');
             images.push(dataUrl);
           } catch (e) {
             console.warn('Canvas 跨域污染或导出失败', e);
@@ -96,7 +96,7 @@ chrome.action.onClicked.addListener(async (tab) => {
       await Promise.all(
         batch.map((dataUrl, idx) => {
           const index = i + idx;
-          const filePath = `${dirPath}/canvas_${index + 1}.png`;
+          const filePath = `${dirPath}/canvas_${index + 1}.jpg`;
 
           return new Promise((resolve) => {
             // 【改进2】在发起下载前检查 data URL 长度，过大时使用 blob URL 降级
@@ -121,7 +121,7 @@ chrome.action.onClicked.addListener(async (tab) => {
                   byteArrays.push(new Uint8Array(byteNumbers));
                 }
 
-                const blob = new Blob(byteArrays, { type: 'image/png' });
+                const blob = new Blob(byteArrays, { type: 'image/jpeg' });
                 downloadUrl = URL.createObjectURL(blob);
               } catch (blobErr) {
                 console.error(`canvas_${index + 1} blob 转换失败，回退到 data URL:`, blobErr);
