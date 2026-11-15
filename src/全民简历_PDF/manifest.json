@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "页面下载按钮插件",
+  "version": "1.0",
+  "description": "在指定页面添加下载按钮",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["https://www.qmjianli.com/*"],
+  "action": {
+    "default_title": "点击添加下载按钮",
+    "default_icon": "favicon.ico"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["style.css", "content.js"],
+      "matches": ["https://www.qmjianli.com/*"]
+    }
+  ]
+}
