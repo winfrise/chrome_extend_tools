@@ -2,7 +2,7 @@
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 999999;
+  z-index: 2147483647; /* 保证在最顶层 */
   padding: 10px 18px;
   background: #1677ff;
   color: #fff;
@@ -12,6 +12,10 @@
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: background 0.2s;
+  
+  /* 防止拖动时选中文本 */
+  user-select: none; 
+  -webkit-user-select: none;
 }
 
 .my-download-btn:hover {
