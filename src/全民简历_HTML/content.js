@@ -14,22 +14,33 @@
   }
 
   // 辅助函数：将图片或字体 URL 转换为 Base64
-  async function getBase64Resource(url) {
+  // 辅助函数：将图片或字体 URL 转换为 Base64
+  async function getBase64Resource(url, isFont = false) {
     if (!url || url.startsWith('data:')) return url;
     try {
-      // 补全为绝对路径，防止相对路径在 fetch 时找不到
+      // 补全为绝对路径
       const absoluteUrl = new URL(url, window.location.href).href;
       const response = await fetch(absoluteUrl);
+      
+      // 【核心修复】：如果是字体，必须校验 Content-Type
+      if (isFont) {
+        const contentType = response.headers.get('content-type') || '';
+        // 如果返回的不是字体格式（比如返回了 text/html 报错页面），直接放弃
+        if (contentType.includes('text/html') || contentType.includes('application/json')) {
+          console.warn(`字体下载失败，服务器返回了 ${contentType}，放弃内嵌:`, absoluteUrl);
+          return absoluteUrl; // 放弃内嵌，回退使用原来的绝对网络路径
+        }
+      }
+
       const blob = await response.blob();
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result);
-        reader.onerror = () => resolve(absoluteUrl); // 失败则回退到绝对路径
+        reader.onerror = () => resolve(absoluteUrl);
         reader.readAsDataURL(blob);
       });
     } catch (e) {
       console.warn('资源转 Base64 失败:', url);
-      // 失败则回退到绝对路径
       return new URL(url, window.location.href).href; 
     }
   }
