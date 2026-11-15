@@ -13,35 +13,39 @@
     return;
   }
 
-  // 辅助函数：将图片 URL 转换为 Base64（防止本地打开 HTML 时图片失效）
-  async function getBase64Image(imgUrl) {
-    if (!imgUrl || imgUrl.startsWith('data:')) return imgUrl;
+  // 辅助函数：将图片或字体 URL 转换为 Base64
+  async function getBase64Resource(url) {
+    if (!url || url.startsWith('data:')) return url;
     try {
-      const response = await fetch(imgUrl);
+      // 补全为绝对路径，防止相对路径在 fetch 时找不到
+      const absoluteUrl = new URL(url, window.location.href).href;
+      const response = await fetch(absoluteUrl);
       const blob = await response.blob();
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result);
-        reader.onerror = () => resolve(imgUrl);
+        reader.onerror = () => resolve(absoluteUrl); // 失败则回退到绝对路径
         reader.readAsDataURL(blob);
       });
     } catch (e) {
-      return imgUrl; // 遇到防盗链或跨域失败，直接返回原链接
+      console.warn('资源转 Base64 失败:', url);
+      // 失败则回退到绝对路径
+      return new URL(url, window.location.href).href; 
     }
   }
 
-  // 辅助函数：处理 CSS 里的背景图，转为 Base64
+  // 辅助函数：处理 CSS 里的背景图
   async function processBackgroundImage(bgImage) {
     if (!bgImage || bgImage === 'none') return bgImage;
     const match = bgImage.match(/url\(['"]?(.*?)['"]?\)/);
     if (match && match[1]) {
-      const base64 = await getBase64Image(match[1]);
+      const base64 = await getBase64Resource(match[1]);
       return `url("${base64}")`;
     }
     return bgImage;
   }
 
-  // 核心：递归克隆节点，将样式变成内联，并处理图片
+  // 核心：递归克隆节点
   async function cloneNodeWithStyles(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       return document.createTextNode(node.nodeValue);
@@ -60,13 +64,10 @@
       
       let val = computedStyle.getPropertyValue(prop);
       
-      // 处理背景图转 Base64
       if (prop === 'background-image' && val.includes('url(')) {
         val = await processBackgroundImage(val);
       }
       
-      // 【关键优化】：因为导出的 HTML 是静态的，我们不需要任何动画、过渡、光标样式等
-      // 把不需要的 CSS 属性过滤掉，让 HTML 体积更小
       if (
         prop === 'animation' || 
         prop === 'transition' || 
@@ -81,18 +82,14 @@
     }
     clone.setAttribute('style', styleStr);
 
-    // 处理 IMG 标签
     if (node.tagName === 'IMG') {
-      const base64Src = await getBase64Image(node.src);
-      clone.src = base64Src;
+      clone.src = await getBase64Resource(node.src);
     }
 
-    // 处理输入框的值
     if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') {
       clone.setAttribute('value', node.value);
     }
 
-    // 递归子元素
     for (let i = 0; i < node.childNodes.length; i++) {
       const childClone = await cloneNodeWithStyles(node.childNodes[i]);
       clone.appendChild(childClone);
@@ -101,18 +98,38 @@
     return clone;
   }
 
-  // 辅助函数：提取页面外部的 Iconfont 样式（因为有些小图标是外链 CSS 引入的）
-  function getExternalFontCss() {
+  // 【重点修复】：提取并转码字体 CSS
+  async function getExternalFontCss() {
     let fontStyles = '';
     const styleSheets = document.styleSheets;
+
+    // 用于从 CSS 中提取 url 的正则
+    const urlRegex = /url\(['"]?(.*?)['"]?\)/g;
+
     for (let i = 0; i < styleSheets.length; i++) {
       try {
         const rules = styleSheets[i].cssRules;
         for (let j = 0; j < rules.length; j++) {
           const rule = rules[j];
-          // 只提取字体定义和图标相关的类
-          if (rule.type === CSSRule.FONT_FACE_RULE || 
-             (rule.selectorText && /icon|fa-|iconfont/i.test(rule.selectorText))) {
+          
+          if (rule.type === CSSRule.FONT_FACE_RULE) {
+            let cssText = rule.cssText;
+            // 找到 @font-face 里的所有 url()
+            const matches = [...cssText.matchAll(urlRegex)];
+            
+            // 逐个下载字体并转 Base64
+            for (const match of matches) {
+              const originalUrl = match[1];
+              // 跳过已经是 base64 的
+              if (originalUrl.startsWith('data:')) continue; 
+              
+              const base64Font = await getBase64Resource(originalUrl);
+              // 替换原 CSS 中的链接
+              cssText = cssText.replace(originalUrl, base64Font);
+            }
+            fontStyles += cssText + '\n';
+          } 
+          else if (rule.selectorText && /icon|fa-|iconfont/i.test(rule.selectorText)) {
             fontStyles += rule.cssText + '\n';
           }
         }
@@ -131,8 +148,8 @@
     // 1. 克隆带有完整内联样式的元素
     const clonedElement = await cloneNodeWithStyles(el);
     
-    // 2. 提取图标样式
-    const fontCss = getExternalFontCss();
+    // 2. 提取并转码字体样式（现在这里已经是完整的 base64 字体了）
+    const fontCss = await getExternalFontCss();
 
     // 3. 拼接最终导出的 HTML
     const htmlContent = `<!DOCTYPE html>
@@ -141,27 +158,24 @@
   <meta charset="UTF-8">
   <title>${originalTitle}</title>
   <style>
-    /* 重置基础样式 */
     html, body {
       margin: 0;
       padding: 0;
-      background: #f5f5f5; /* 网页背景稍微灰一点，衬托简历 */
+      background: #f5f5f5; 
       display: flex;
       justify-content: center;
     }
-    /* 让目标内容像一张 A4 纸一样居中显示 */
     #${TARGET_ID} {
       width: 100%;
-      max-width: 800px; /* A4 纸的常见网页宽度 */
+      max-width: 800px; 
       background: #fff;
       box-sizing: border-box;
       margin: 20px 0;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    /* 防止图片溢出 */
     img { max-width: 100%; height: auto; }
     
-    /* 注入提取的图标字体样式 */
+    /* 注入转码后的图标字体样式 */
     ${fontCss}
   </style>
 </head>
@@ -178,7 +192,9 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `导出内容_${new Date().getTime()}.html`;
+    // 清理一下文件名里的特殊字符
+    const safeTitle = originalTitle.replace(/[\\/:*?"<>|]/g, '_');
+    a.download = `${safeTitle}_${new Date().getTime()}.html`;
     document.body.appendChild(a);
     a.click();
     
