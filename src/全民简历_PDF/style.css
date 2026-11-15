@@ -21,3 +21,13 @@
 .my-download-btn:hover {
   background: #0d5fd6;
 }
+
+
+/**
+ 覆盖下载样式
+*/ 
+@media print {
+  .edit_resume [data-v-236d5b80] {
+    visibility: visible !important;
+  }
+}
