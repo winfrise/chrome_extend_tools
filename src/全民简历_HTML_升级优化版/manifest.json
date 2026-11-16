@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "简历 HTML 升级优化版",
+  "version": "1.0",
+  "description": "点击图标将指定内容导出为干净的 HTML 文件",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+        "https://www.qmjianli.com/*"
+  ],
+  "action": {
+    "default_title": "导出 HTML"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
