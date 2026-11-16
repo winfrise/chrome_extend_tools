@@ -146,7 +146,6 @@
     }
 
     // 2. 从样式表规则中提取字体 URL。
-    // 这一步的关键：必须基于 sheet.href（CSS 文件的地址）来解析相对路径，而不是 window.location.href
     const fontUrlsToDownload = new Set();
     const fontUrlMap = new Map(); // absoluteUrl -> localPath
 
@@ -154,9 +153,7 @@
       let rules = null;
       try {
         rules = sheet.cssRules;
-      } catch (e) {
-        // 跨域样式表读不到规则，忽略，因为跨域字体通常会用绝对路径
-      }
+      } catch (e) {}
 
       if (rules) {
         const walk = (ruleList, baseHref) => {
@@ -169,7 +166,6 @@
                 let rawUrl = match[1];
                 if (rawUrl.startsWith('data:')) continue;
                 
-                // 【核心修复】：使用 CSS 文件的绝对路径 (baseHref) 作为基准去解析
                 const absoluteUrl = new URL(rawUrl, baseHref).href;
                 fontUrlsToDownload.add(absoluteUrl);
               }
@@ -178,7 +174,6 @@
             }
           }
         };
-        // 传入 sheet.href 作为基准地址
         walk(rules, sheet.href || window.location.href);
       }
     }
@@ -190,12 +185,10 @@
     }
 
     // 4. 将 CSS 中的字体 URL 替换为本地路径
-    // 这里用正则全局替换，同样需要识别相对路径并解析为绝对路径去匹配
     allCssText = allCssText.replace(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g, (match, rawUrl) => {
       if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) return match;
       
       try {
-        // 尝试用多种基准路径去解析，只要能匹配到我们下载过的字体就行
         const baseHrefs = [window.location.href, ...Array.from(document.styleSheets).map(s => s.href).filter(Boolean)];
         
         for (const baseHref of baseHrefs) {
@@ -205,12 +198,12 @@
             if (localPath) {
               return `url("../${localPath}")`;
             } else {
-              return `url(local(""))`; // 失败则消除请求
+              return `url(local(""))`;
             }
           }
         }
       } catch(e) {}
-      return match; // 不是字体或没匹配上，保留原样
+      return match;
     });
 
     // 5. 构建最终 style.css
@@ -253,7 +246,22 @@
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `简历_${new Date().getTime()}.zip`;
+
+    // ==============================================================
+    // 【修改点】：生成 yyyy-mm-dd_hh_mm_ss 格式的时间戳
+    // ==============================================================
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const timeStr = `${yyyy}-${mm}-${dd}_${hh}_${min}_${ss}`;
+    
+    a.download = `简历_${timeStr}.zip`;
+    // ==============================================================
+
     document.body.appendChild(a);
     a.click();
 
